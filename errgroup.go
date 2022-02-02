@@ -8,7 +8,10 @@ package errgroup
 
 import (
 	"context"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 )
 
 // A Group is a collection of goroutines working on subtasks that are part of
@@ -16,12 +19,21 @@ import (
 //
 // A zero Group is valid and does not cancel on error.
 type Group struct {
-	cancel func()
+	cancel       func()
+	wg           sync.WaitGroup
+	stop         chan struct{}
+	catchSignals bool
+	errOnce      sync.Once
+	err          error
+}
 
-	wg sync.WaitGroup
-
-	errOnce sync.Once
-	err     error
+// WithSignalHandler returns a new Group configured with a signal handler and an
+// optional stop channel (pass nil if you don't need it).
+func WithSignalHandler(stop chan struct{}) *Group {
+	return &Group{
+		stop:         stop,
+		catchSignals: true,
+	}
 }
 
 // WithContext returns a new Group and an associated Context derived from ctx.
@@ -36,11 +48,28 @@ func WithContext(ctx context.Context) (*Group, context.Context) {
 
 // Wait blocks until all function calls from the Go method have returned, then
 // returns the first non-nil error (if any) from them.
+//
+// If sigterm or an interrupt is caught, close the stop channel.
 func (g *Group) Wait() error {
+	if g.catchSignals {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+		go func() {
+			<-c
+
+			if g.stop != nil {
+				close(g.stop)
+			}
+		}()
+	}
+
 	g.wg.Wait()
+
 	if g.cancel != nil {
 		g.cancel()
 	}
+
 	return g.err
 }
 
