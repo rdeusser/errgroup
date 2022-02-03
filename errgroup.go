@@ -119,6 +119,10 @@ func (g *Group) Go(f func() error) {
 
 func (g *Group) runFinally() {
 	g.finallyOnce.Do(func() {
+		if g.finally == nil {
+			g.finally = func() error { return nil }
+		}
+
 		if err := g.finally(); err != nil {
 			if g.err == nil {
 				g.err = err
