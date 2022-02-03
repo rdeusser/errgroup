@@ -31,15 +31,15 @@ type Group struct {
 }
 
 // WithSignalHandler returns a new Group configured with a signal handler, an
-// associated Context derived from ctx, and an optional stop channel (pass nil
-// if you don't need it).
-func WithSignalHandler(ctx context.Context, stop chan struct{}) (*Group, context.Context) {
+// associated Context derived from ctx, and a stop channel.
+func WithSignalHandler(ctx context.Context) (*Group, context.Context, chan struct{}) {
+	stop := make(chan struct{})
 	ctx, cancel := context.WithCancel(ctx)
 	return &Group{
 		cancel:       cancel,
 		stop:         stop,
 		catchSignals: true,
-	}, ctx
+	}, ctx, stop
 }
 
 // WithContext returns a new Group and an associated Context derived from ctx.
