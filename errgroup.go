@@ -61,7 +61,8 @@ func (g *Group) Finally(fn func() error) {
 // Wait blocks until all function calls from the Go method have returned, then
 // returns the first non-nil error (if any) from them.
 //
-// If SIGINT, SIGKILL, or SIGTERM is caught, close the stop channel.
+// If SIGINT, SIGKILL, or SIGTERM is caught, run finally, cancel the context,
+// and close the stop channel.
 func (g *Group) Wait() error {
 	if g.catchSignals {
 		c := make(chan os.Signal, 2)
@@ -69,6 +70,8 @@ func (g *Group) Wait() error {
 
 		go func() {
 			<-c
+
+			g.runFinally()
 
 			if g.cancel != nil {
 				g.cancel()
@@ -78,8 +81,6 @@ func (g *Group) Wait() error {
 				close(g.stop)
 			}
 
-			g.runFinally()
-
 			<-c
 			os.Exit(0)
 		}()
@@ -87,11 +88,11 @@ func (g *Group) Wait() error {
 
 	g.wg.Wait()
 
+	g.runFinally()
+
 	if g.cancel != nil {
 		g.cancel()
 	}
-
-	g.runFinally()
 
 	return g.err
 }
