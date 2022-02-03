@@ -60,15 +60,22 @@ func (g *Group) Finally(fn func() error) {
 // If sigterm or an interrupt is caught, close the stop channel.
 func (g *Group) Wait() error {
 	if g.catchSignals {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		c := make(chan os.Signal, 2)
+		signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 		go func() {
 			<-c
 
+			if g.cancel != nil {
+				g.cancel()
+			}
+
 			if g.stop != nil {
 				close(g.stop)
 			}
+
+			<-c
+			os.Exit(0)
 		}()
 	}
 
