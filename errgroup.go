@@ -20,7 +20,7 @@ import (
 //
 // A zero Group is valid and does not cancel on error.
 type Group struct {
-	cancel       func()
+	cancel       context.CancelFunc
 	wg           sync.WaitGroup
 	stop         chan struct{}
 	finally      func() error
