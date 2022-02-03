@@ -29,13 +29,17 @@ type Group struct {
 	err          error
 }
 
-// WithSignalHandler returns a new Group configured with a signal handler and an
-// optional stop channel (pass nil if you don't need it).
-func WithSignalHandler(stop chan struct{}) *Group {
+// WithSignalHandler returns a new Group configured with a signal handler, an
+// associated Context derived from ctx, and an optional stop channel (pass nil
+// if you don't need it).
+func WithSignalHandler(ctx context.Context, stop chan struct{}) (*Group, context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+
 	return &Group{
+		cancel:       cancel,
 		stop:         stop,
 		catchSignals: true,
-	}
+	}, ctx
 }
 
 // WithContext returns a new Group and an associated Context derived from ctx.
@@ -57,7 +61,7 @@ func (g *Group) Finally(fn func() error) {
 // Wait blocks until all function calls from the Go method have returned, then
 // returns the first non-nil error (if any) from them.
 //
-// If sigterm or an interrupt is caught, close the stop channel.
+// If SIGINT, SIGKILL, or SIGTERM is caught, close the stop channel.
 func (g *Group) Wait() error {
 	if g.catchSignals {
 		c := make(chan os.Signal, 2)
