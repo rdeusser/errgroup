@@ -24,6 +24,7 @@ type Group struct {
 	wg           sync.WaitGroup
 	stop         chan struct{}
 	finally      func() error
+	finallyOnce  sync.Once
 	catchSignals bool
 	errOnce      sync.Once
 	err          error
@@ -34,7 +35,6 @@ type Group struct {
 // if you don't need it).
 func WithSignalHandler(ctx context.Context, stop chan struct{}) (*Group, context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
-
 	return &Group{
 		cancel:       cancel,
 		stop:         stop,
@@ -78,6 +78,8 @@ func (g *Group) Wait() error {
 				close(g.stop)
 			}
 
+			g.runFinally()
+
 			<-c
 			os.Exit(0)
 		}()
@@ -85,17 +87,11 @@ func (g *Group) Wait() error {
 
 	g.wg.Wait()
 
-	if err := g.finally(); err != nil {
-		if g.err == nil {
-			g.err = err
-		} else {
-			g.err = fmt.Errorf("%s: %w", g.err, err) // not sure if I should do this
-		}
-	}
-
 	if g.cancel != nil {
 		g.cancel()
 	}
+
+	g.runFinally()
 
 	return g.err
 }
@@ -119,4 +115,16 @@ func (g *Group) Go(f func() error) {
 			})
 		}
 	}()
+}
+
+func (g *Group) runFinally() {
+	g.finallyOnce.Do(func() {
+		if err := g.finally(); err != nil {
+			if g.err == nil {
+				g.err = err
+			} else {
+				g.err = fmt.Errorf("%s: %w", g.err, err) // not sure if I should do this
+			}
+		}
+	})
 }
