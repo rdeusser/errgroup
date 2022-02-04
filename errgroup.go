@@ -23,6 +23,7 @@ type Group struct {
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
 	stop         chan struct{}
+	stopOnce     sync.Once
 	finally      func() error
 	finallyOnce  sync.Once
 	catchSignals bool
@@ -77,9 +78,7 @@ func (g *Group) Wait() error {
 				g.cancel()
 			}
 
-			if g.stop != nil {
-				close(g.stop)
-			}
+			g.closeStop()
 
 			<-c
 			os.Exit(0)
@@ -93,6 +92,8 @@ func (g *Group) Wait() error {
 	if g.cancel != nil {
 		g.cancel()
 	}
+
+	g.closeStop()
 
 	return g.err
 }
@@ -116,6 +117,14 @@ func (g *Group) Go(f func() error) {
 			})
 		}
 	}()
+}
+
+func (g *Group) closeStop() {
+	g.stopOnce.Do(func() {
+		if g.stop != nil {
+			close(g.stop)
+		}
+	})
 }
 
 func (g *Group) runFinally() {
